@@ -36,12 +36,21 @@
         -webkit-tap-highlight-color: transparent;
       }
 
+      html,
+      body {
+        height: 100%;
+        overscroll-behavior: none;
+      }
+
       body {
         margin: 0;
         font-family: "SF Pro Text", "SF Pro Display", -apple-system, "Helvetica Neue", Helvetica, sans-serif;
         background: radial-gradient(120% 120% at 50% -10%, #1b1b1b 0%, #070707 55%, #000 100%);
         color: var(--ink);
         overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
 
       .app {
@@ -58,6 +67,7 @@
         height: 100%;
         overflow: hidden;
         background: #000;
+        touch-action: none;
       }
 
       video {
@@ -251,6 +261,7 @@
       .thumb {
         width: 54px;
         height: 54px;
+        justify-self: start;
         border-radius: 16px;
         border: 2px solid rgba(255, 255, 255, 0.2);
         background: rgba(0, 0, 0, 0.4);
@@ -284,6 +295,7 @@
       .shutter-btn {
         width: 90px;
         height: 90px;
+        justify-self: center;
         border-radius: 50%;
         border: 5px solid rgba(255, 255, 255, 0.2);
         background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f1f1 40%, #d9d9d9 100%);
@@ -310,6 +322,7 @@
       .switch-btn {
         width: 54px;
         height: 54px;
+        justify-self: end;
         border-radius: 50%;
         border: 1px solid rgba(255, 255, 255, 0.22);
         background: rgba(0, 0, 0, 0.4);
@@ -559,25 +572,11 @@
             <span class="badge">SILENT</span>
           </div>
           <div class="top-right">
-            <button id="flashToggle" class="icon-btn" aria-label="Flash (UI only)" aria-pressed="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M13 2 5 14h6l-1 8 8-12h-6l1-8z"
-                />
-              </svg>
-            </button>
             <button id="gridToggle" class="icon-btn" aria-label="Grid" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"
                 />
-              </svg>
-            </button>
-            <button id="menuBtn" class="icon-btn" aria-label="Menu" aria-pressed="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="5" cy="12" r="2"></circle>
-                <circle cx="12" cy="12" r="2"></circle>
-                <circle cx="19" cy="12" r="2"></circle>
               </svg>
             </button>
           </div>
@@ -647,9 +646,7 @@
         bootOverlay: document.getElementById("bootOverlay"),
         startBtn: document.getElementById("startBtn"),
         errorBanner: document.getElementById("errorBanner"),
-        flashToggle: document.getElementById("flashToggle"),
         gridToggle: document.getElementById("gridToggle"),
-        menuBtn: document.getElementById("menuBtn"),
         zoomRow: document.getElementById("zoomRow"),
         zoomHint: document.getElementById("zoomHint"),
         zoomButtons: Array.from(document.querySelectorAll(".zoom-chip")),
@@ -673,9 +670,45 @@
         usingSimulatedZoom: false,
         lastCaptureUrl: null,
         shutterBusy: false,
+        pinchActive: false,
+        pinchStartDistance: 0,
+        pinchStartZoom: 1,
+        pinchRaf: 0,
+        pendingZoom: null,
       };
 
       const zoomSteps = [0.5, 1, 2, 3];
+
+      function getZoomLimits() {
+        if (state.canZoom && state.zoomCaps) {
+          const min = typeof state.zoomCaps.min === "number" ? state.zoomCaps.min : 0.5;
+          const max = typeof state.zoomCaps.max === "number" ? state.zoomCaps.max : 3;
+          return { min, max };
+        }
+
+        return { min: 0.5, max: 3 };
+      }
+
+      function getPinchDistance(touches) {
+        const [first, second] = touches;
+        const dx = first.clientX - second.clientX;
+        const dy = first.clientY - second.clientY;
+        return Math.hypot(dx, dy);
+      }
+
+      function scheduleZoom(value) {
+        state.pendingZoom = value;
+        if (state.pinchRaf) {
+          return;
+        }
+
+        state.pinchRaf = requestAnimationFrame(() => {
+          state.pinchRaf = 0;
+          if (typeof state.pendingZoom === "number") {
+            void applyZoom(state.pendingZoom);
+          }
+        });
+      }
 
       function showError(message) {
         elements.errorBanner.textContent = message;
@@ -699,6 +732,8 @@
         state.canZoom = false;
         state.zoomCaps = null;
         state.usingSimulatedZoom = false;
+        state.pinchActive = false;
+        state.pinchStartDistance = 0;
       }
 
       async function startCamera() {
@@ -819,6 +854,44 @@
         elements.shutterFlash.classList.add("active");
       }
 
+      function handlePinchStart(event) {
+        if (!state.stream) {
+          return;
+        }
+
+        if (event.touches.length === 2) {
+          event.preventDefault();
+          state.pinchActive = true;
+          state.pinchStartDistance = getPinchDistance(event.touches);
+          state.pinchStartZoom = state.zoom;
+        }
+      }
+
+      function handlePinchMove(event) {
+        if (!state.pinchActive || event.touches.length !== 2) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const distance = getPinchDistance(event.touches);
+        if (!state.pinchStartDistance) {
+          return;
+        }
+
+        const scale = distance / state.pinchStartDistance;
+        const limits = getZoomLimits();
+        const targetZoom = Math.min(limits.max, Math.max(limits.min, state.pinchStartZoom * scale));
+        scheduleZoom(targetZoom);
+      }
+
+      function handlePinchEnd(event) {
+        if (event.touches.length < 2) {
+          state.pinchActive = false;
+          state.pinchStartDistance = 0;
+        }
+      }
+
       function openPreview(url) {
         elements.previewImage.src = url;
         elements.downloadBtn.href = url;
@@ -906,21 +979,26 @@
         });
       });
 
-      elements.flashToggle.addEventListener("click", () => {
-        toggleButton(elements.flashToggle);
-      });
-
       elements.gridToggle.addEventListener("click", () => {
         toggleButton(elements.gridToggle);
         elements.gridOverlay.classList.toggle("hidden", !elements.gridToggle.classList.contains("active"));
       });
 
-      elements.menuBtn.addEventListener("click", () => {
-        toggleButton(elements.menuBtn);
-        setTimeout(() => elements.menuBtn.classList.remove("active"), 400);
-      });
-
       elements.stage.addEventListener("pointerdown", triggerFocusRing);
+      elements.stage.addEventListener("touchstart", handlePinchStart, { passive: false });
+      elements.stage.addEventListener("touchmove", handlePinchMove, { passive: false });
+      elements.stage.addEventListener("touchend", handlePinchEnd, { passive: false });
+      elements.stage.addEventListener("touchcancel", handlePinchEnd, { passive: false });
+
+      ["gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+        document.addEventListener(
+          eventName,
+          (event) => {
+            event.preventDefault();
+          },
+          { passive: false }
+        );
+      });
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
           stopCamera();
