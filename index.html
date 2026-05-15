@@ -29,9 +29,12 @@
         --danger: #ff6b6b;
         --safe-top: env(safe-area-inset-top, 0px);
         --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
         --bar-top: var(--safe-top);
         --bar-bottom: var(--safe-bottom);
         --bar-color: #000000;
+        --corner-drop: clamp(16px, 3vh, 30px);
       }
 
       * {
@@ -306,6 +309,7 @@
         display: grid;
         place-items: center;
         cursor: pointer;
+        transform: translateY(var(--corner-drop));
       }
 
       .thumb img {
@@ -353,6 +357,10 @@
         transition: transform 0.15s ease;
       }
 
+      .shutter-btn.landscape {
+        display: none;
+      }
+
       .shutter-btn:active {
         transform: scale(0.94);
       }
@@ -368,6 +376,7 @@
         display: grid;
         place-items: center;
         cursor: pointer;
+        transform: translateY(var(--corner-drop));
       }
 
       .switch-btn svg {
@@ -586,6 +595,21 @@
         }
       }
 
+      @media (orientation: landscape) {
+        .controls-row .shutter-btn {
+          display: none;
+        }
+
+        .shutter-btn.landscape {
+          display: block;
+          position: absolute;
+          right: calc(16px + var(--safe-right));
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 4;
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         * {
           animation-duration: 0.01ms !important;
@@ -650,6 +674,12 @@
           </div>
         </div>
 
+        <button
+          id="shutterBtnLandscape"
+          class="shutter-btn landscape"
+          aria-label="Shutter"
+        ></button>
+
         <div id="bootOverlay" class="boot-overlay">
           <div class="boot-card">
             <div class="boot-title">Silencio Camera</div>
@@ -690,6 +720,7 @@
         thumbBtn: document.getElementById("thumbBtn"),
         thumbImg: document.getElementById("thumbImg"),
         shutterBtn: document.getElementById("shutterBtn"),
+        shutterBtnLandscape: document.getElementById("shutterBtnLandscape"),
         switchBtn: document.getElementById("switchBtn"),
         previewOverlay: document.getElementById("previewOverlay"),
         previewImage: document.getElementById("previewImage"),
@@ -1152,6 +1183,7 @@
         startCamera();
       });
       elements.shutterBtn.addEventListener("click", capturePhoto);
+      elements.shutterBtnLandscape.addEventListener("click", capturePhoto);
       elements.thumbBtn.addEventListener("click", () => {
         if (state.lastCaptureUrl) {
           openPreview(state.lastCaptureUrl);
