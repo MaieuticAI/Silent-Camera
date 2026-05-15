@@ -276,12 +276,17 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
         opacity: 0;
         transition: opacity 0.25s ease;
       }
 
       .thumb.has-image img {
         opacity: 1;
+      }
+
+      .thumb.has-image .thumb-placeholder {
+        display: none;
       }
 
       .thumb-placeholder {
@@ -297,22 +302,21 @@
         height: 90px;
         justify-self: center;
         border-radius: 50%;
-        border: 5px solid rgba(255, 255, 255, 0.2);
-        background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f1f1f1 40%, #d9d9d9 100%);
+        border: 6px solid rgba(255, 255, 255, 0.35);
+        background: radial-gradient(
+          circle at 32% 30%,
+          #ffffff 0%,
+          #f7f7f7 42%,
+          #e2e2e2 72%,
+          #d5d5d5 100%
+        );
         box-shadow:
-          0 10px 24px rgba(0, 0, 0, 0.45),
-          inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+          0 12px 24px rgba(0, 0, 0, 0.45),
+          inset 0 2px 6px rgba(255, 255, 255, 0.8),
+          inset 0 -10px 18px rgba(0, 0, 0, 0.12);
         cursor: pointer;
         position: relative;
         transition: transform 0.15s ease;
-      }
-
-      .shutter-btn::after {
-        content: "";
-        position: absolute;
-        inset: 8px;
-        border-radius: 50%;
-        border: 2px solid rgba(0, 0, 0, 0.06);
       }
 
       .shutter-btn:active {
@@ -593,7 +597,6 @@
 
           <div class="controls-row">
             <button id="thumbBtn" class="thumb" aria-label="Last photo">
-              <span class="thumb-placeholder" aria-hidden="true"></span>
               <img id="thumbImg" alt="" />
             </button>
             <button id="shutterBtn" class="shutter-btn" aria-label="Shutter"></button>
@@ -982,7 +985,13 @@
 
         elements.canvas.width = width;
         elements.canvas.height = height;
+        context.save();
+        if (state.facingMode === "user") {
+          context.translate(width, 0);
+          context.scale(-1, 1);
+        }
         context.drawImage(elements.video, 0, 0, width, height);
+        context.restore();
 
         triggerFlash();
 
