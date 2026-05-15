@@ -593,6 +593,12 @@
           align-items: center;
           justify-content: space-between;
           padding: 0 var(--edge-right) 0 var(--edge-left);
+          pointer-events: none;
+          z-index: 2;
+        }
+
+        .controls-row > button {
+          pointer-events: auto;
         }
 
         .controls-row .shutter-btn {
@@ -604,6 +610,7 @@
           left: 50%;
           transform: translateX(-50%);
           bottom: calc(8px + var(--bar-bottom));
+          z-index: 3;
         }
 
         .shutter-btn.landscape {
