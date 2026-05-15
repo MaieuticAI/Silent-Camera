@@ -34,7 +34,6 @@
         --bar-top: var(--safe-top);
         --bar-bottom: var(--safe-bottom);
         --bar-color: #000000;
-        --corner-drop: clamp(16px, 3vh, 30px);
       }
 
       * {
@@ -228,7 +227,7 @@
       .bottom-ui {
         position: absolute;
         inset: auto 0 0 0;
-        padding: 0 18px calc(12px + var(--bar-bottom));
+        padding: 0 18px calc(6px + var(--bar-bottom));
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -309,7 +308,6 @@
         display: grid;
         place-items: center;
         cursor: pointer;
-        transform: translateY(var(--corner-drop));
       }
 
       .thumb img {
@@ -376,7 +374,6 @@
         display: grid;
         place-items: center;
         cursor: pointer;
-        transform: translateY(var(--corner-drop));
       }
 
       .switch-btn svg {
@@ -385,24 +382,6 @@
         fill: currentColor;
       }
 
-      .mode-row {
-        margin-top: 2px;
-        pointer-events: none;
-      }
-
-      .mode-track {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-        font-size: 13px;
-        letter-spacing: 0.35em;
-        color: var(--dim);
-        text-transform: uppercase;
-      }
-
-      .mode-track .active {
-        color: var(--accent);
-      }
 
       .boot-overlay {
         position: absolute;
@@ -667,11 +646,6 @@
             </button>
           </div>
 
-          <div class="mode-row">
-            <div class="mode-track">
-              <span class="active">PHOTO</span>
-            </div>
-          </div>
         </div>
 
         <button
