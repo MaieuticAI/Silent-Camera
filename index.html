@@ -744,6 +744,7 @@
 
         clearError();
         stopCamera();
+        void lockPortraitOrientation();
 
         const constraints = {
           audio: false,
@@ -854,6 +855,41 @@
         elements.shutterFlash.classList.add("active");
       }
 
+      async function lockPortraitOrientation() {
+        if (!screen.orientation || typeof screen.orientation.lock !== "function") {
+          return;
+        }
+
+        try {
+          await screen.orientation.lock("portrait");
+        } catch (error) {
+          // Orientation lock is best-effort and may be blocked by the browser.
+        }
+      }
+
+      function dataUrlToBlob(dataUrl) {
+        if (!dataUrl) {
+          return null;
+        }
+
+        const parts = dataUrl.split(",");
+        if (parts.length < 2) {
+          return null;
+        }
+
+        const match = parts[0].match(/:(.*?);/);
+        const mime = match ? match[1] : "image/jpeg";
+        const binary = atob(parts[1]);
+        const length = binary.length;
+        const bytes = new Uint8Array(length);
+
+        for (let i = 0; i < length; i += 1) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+
+        return new Blob([bytes], { type: mime });
+      }
+
       function handlePinchStart(event) {
         if (!state.stream) {
           return;
@@ -927,30 +963,58 @@
 
         triggerFlash();
 
-        elements.canvas.toBlob(
-          (blob) => {
-            if (!blob) {
+        const dataUrl = elements.canvas.toDataURL("image/jpeg", 0.92);
+        const blob = dataUrlToBlob(dataUrl);
+
+        if (!blob) {
+          state.shutterBusy = false;
+          showError("Failed to capture photo.");
+          return;
+        }
+
+        if (state.lastCaptureUrl) {
+          URL.revokeObjectURL(state.lastCaptureUrl);
+        }
+
+        const url = URL.createObjectURL(blob);
+        state.lastCaptureUrl = url;
+
+        elements.thumbImg.src = url;
+        elements.thumbBtn.classList.add("has-image");
+
+        const file = new File([blob], `silencio-${Date.now()}.jpg`, {
+          type: blob.type || "image/jpeg",
+        });
+        const shareData = {
+          files: [file],
+          title: "Silencio Photo",
+        };
+
+        let canShare = false;
+        if (navigator.share) {
+          try {
+            canShare = navigator.canShare ? navigator.canShare(shareData) : true;
+          } catch (error) {
+            canShare = false;
+          }
+        }
+
+        if (canShare) {
+          navigator
+            .share(shareData)
+            .catch((error) => {
+              if (error && error.name === "AbortError") {
+                return;
+              }
+              openPreview(url);
+            })
+            .finally(() => {
               state.shutterBusy = false;
-              showError("Failed to capture photo.");
-              return;
-            }
-
-            if (state.lastCaptureUrl) {
-              URL.revokeObjectURL(state.lastCaptureUrl);
-            }
-
-            const url = URL.createObjectURL(blob);
-            state.lastCaptureUrl = url;
-
-            elements.thumbImg.src = url;
-            elements.thumbBtn.classList.add("has-image");
-            openPreview(url);
-
-            state.shutterBusy = false;
-          },
-          "image/jpeg",
-          0.92
-        );
+            });
+        } else {
+          openPreview(url);
+          state.shutterBusy = false;
+        }
       }
 
       function toggleButton(button) {
@@ -959,7 +1023,10 @@
         button.setAttribute("aria-pressed", String(nextState));
       }
 
-      elements.startBtn.addEventListener("click", startCamera);
+      elements.startBtn.addEventListener("click", () => {
+        void lockPortraitOrientation();
+        startCamera();
+      });
       elements.shutterBtn.addEventListener("click", capturePhoto);
       elements.thumbBtn.addEventListener("click", () => {
         if (state.lastCaptureUrl) {
@@ -1006,6 +1073,9 @@
         }
       });
       window.addEventListener("pagehide", stopCamera);
+      window.addEventListener("orientationchange", () => {
+        void lockPortraitOrientation();
+      });
 
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
