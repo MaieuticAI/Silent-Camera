@@ -29,6 +29,9 @@
         --danger: #ff6b6b;
         --safe-top: env(safe-area-inset-top, 0px);
         --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --bar-top: var(--safe-top);
+        --bar-bottom: var(--safe-bottom);
+        --bar-color: #000000;
       }
 
       * {
@@ -57,7 +60,7 @@
         position: relative;
         width: 100vw;
         height: 100vh;
-        height: 100dvh;
+        height: 100svh;
         animation: appFade 0.7s ease both;
       }
 
@@ -70,6 +73,32 @@
         touch-action: none;
       }
 
+      body.standalone {
+        --bar-top: max(var(--safe-top), 24px);
+        --bar-bottom: max(var(--safe-bottom), 24px);
+      }
+
+      body.standalone .camera-stage::before,
+      body.standalone .camera-stage::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        background: var(--bar-color);
+        pointer-events: none;
+        z-index: 3;
+      }
+
+      body.standalone .camera-stage::before {
+        top: 0;
+        height: var(--bar-top);
+      }
+
+      body.standalone .camera-stage::after {
+        bottom: 0;
+        height: var(--bar-bottom);
+      }
+
       video {
         position: absolute;
         inset: 0;
@@ -78,7 +107,12 @@
         object-fit: cover;
         background: #000;
         transform: scale(1);
-        transition: transform 0.25s ease;
+        opacity: 0;
+        transition: opacity 0.2s ease, transform 0.25s ease;
+      }
+
+      .camera-stage.ready video {
+        opacity: 1;
       }
 
       .vignette {
@@ -122,7 +156,7 @@
       .top-ui {
         position: absolute;
         inset: 0 0 auto 0;
-        padding: calc(10px + var(--safe-top)) 16px 0;
+        padding: calc(10px + var(--bar-top)) 16px 0;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -191,7 +225,7 @@
       .bottom-ui {
         position: absolute;
         inset: auto 0 0 0;
-        padding: 0 18px calc(12px + var(--safe-bottom));
+        padding: 0 18px calc(12px + var(--bar-bottom));
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -418,7 +452,7 @@
 
       .error-banner {
         position: absolute;
-        top: calc(56px + var(--safe-top));
+        top: calc(56px + var(--bar-top));
         left: 50%;
         transform: translateX(-50%);
         background: rgba(20, 0, 0, 0.72);
@@ -672,6 +706,7 @@
         canZoom: false,
         usingSimulatedZoom: false,
         lastCaptureUrl: null,
+        lastCaptureBlob: null,
         shutterBusy: false,
         pinchActive: false,
         pinchStartDistance: 0,
@@ -682,6 +717,13 @@
 
       const zoomSteps = [0.5, 1, 2, 3];
       const BOOT_SEEN_KEY = "silencio_boot_seen";
+
+      const isStandaloneDisplay =
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
+        window.navigator.standalone === true;
+      if (isStandaloneDisplay) {
+        document.body.classList.add("standalone");
+      }
 
       function hasBootSeen() {
         try {
@@ -736,6 +778,10 @@
         elements.video.style.transform = `scaleX(${flip}) scale(${baseScale})`;
       }
 
+      function markVideoReady() {
+        elements.stage.classList.add("ready");
+      }
+
       function showError(message) {
         elements.errorBanner.textContent = message;
         elements.errorBanner.classList.remove("hidden");
@@ -760,6 +806,7 @@
         state.usingSimulatedZoom = false;
         state.pinchActive = false;
         state.pinchStartDistance = 0;
+        elements.stage.classList.remove("ready");
       }
 
       async function startCamera() {
@@ -786,6 +833,12 @@
           state.stream = stream;
           elements.video.srcObject = stream;
           await elements.video.play();
+
+          if (elements.video.readyState >= 2) {
+            markVideoReady();
+          } else {
+            elements.video.addEventListener("loadeddata", markVideoReady, { once: true });
+          }
 
           const [track] = stream.getVideoTracks();
           state.track = track || null;
@@ -1007,6 +1060,7 @@
         if (state.lastCaptureUrl) {
           URL.revokeObjectURL(state.lastCaptureUrl);
         }
+        state.lastCaptureBlob = blob;
 
         const url = URL.createObjectURL(blob);
         state.lastCaptureUrl = url;
@@ -1055,6 +1109,43 @@
         button.setAttribute("aria-pressed", String(nextState));
       }
 
+      async function shareCaptureFromPreview(event) {
+        if (!state.lastCaptureBlob || !navigator.share) {
+          return;
+        }
+
+        const file = new File([state.lastCaptureBlob], `silencio-${Date.now()}.jpg`, {
+          type: state.lastCaptureBlob.type || "image/jpeg",
+        });
+        const shareData = {
+          files: [file],
+          title: "Silencio Photo",
+        };
+
+        let canShare = true;
+        if (navigator.canShare) {
+          try {
+            canShare = navigator.canShare(shareData);
+          } catch (error) {
+            canShare = false;
+          }
+        }
+
+        if (!canShare) {
+          return;
+        }
+
+        event.preventDefault();
+
+        try {
+          await navigator.share(shareData);
+        } catch (error) {
+          if (error && error.name === "AbortError") {
+            return;
+          }
+        }
+      }
+
       elements.startBtn.addEventListener("click", () => {
         setBootSeen();
         void lockPortraitOrientation();
@@ -1067,6 +1158,9 @@
         }
       });
       elements.closePreview.addEventListener("click", closePreview);
+      elements.downloadBtn.addEventListener("click", (event) => {
+        void shareCaptureFromPreview(event);
+      });
       elements.switchBtn.addEventListener("click", async () => {
         state.facingMode = state.facingMode === "environment" ? "user" : "environment";
         await startCamera();
@@ -1102,6 +1196,14 @@
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
           stopCamera();
+          setBootVisible(true);
+          return;
+        }
+
+        if (hasBootSeen()) {
+          setBootVisible(false);
+          startCamera();
+        } else {
           setBootVisible(true);
         }
       });
