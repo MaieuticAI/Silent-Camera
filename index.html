@@ -577,14 +577,31 @@
       @media (orientation: landscape) {
         .bottom-ui {
           width: 100%;
+          padding: 0;
+          gap: 0;
+          display: block;
         }
 
         .controls-row {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: calc(8px + var(--bar-bottom));
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           padding: 0 calc(16px + var(--safe-right)) 0 calc(16px + var(--safe-left));
         }
 
         .controls-row .shutter-btn {
           display: none;
+        }
+
+        .zoom-row {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          bottom: calc(8px + var(--bar-bottom));
         }
 
         .shutter-btn.landscape {
