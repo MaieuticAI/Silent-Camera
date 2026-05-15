@@ -92,10 +92,10 @@
         position: absolute;
         inset: 0;
         background-image:
-          linear-gradient(to right, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
-          linear-gradient(to bottom, rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+          linear-gradient(to right, rgba(255, 255, 255, 0.32) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.32) 1px, transparent 1px);
         background-size: 33.333% 33.333%;
-        opacity: 0.2;
+        opacity: 0.5;
         pointer-events: none;
       }
 
@@ -678,6 +678,23 @@
       };
 
       const zoomSteps = [0.5, 1, 2, 3];
+      const BOOT_SEEN_KEY = "silencio_boot_seen";
+
+      function hasBootSeen() {
+        try {
+          return localStorage.getItem(BOOT_SEEN_KEY) === "1";
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function setBootSeen() {
+        try {
+          localStorage.setItem(BOOT_SEEN_KEY, "1");
+        } catch (error) {
+          // Ignore storage failures (private browsing, quotas, etc.).
+        }
+      }
 
       function getZoomLimits() {
         if (state.canZoom && state.zoomCaps) {
@@ -708,6 +725,12 @@
             void applyZoom(state.pendingZoom);
           }
         });
+      }
+
+      function updateVideoTransform() {
+        const baseScale = state.usingSimulatedZoom ? state.zoom : 1;
+        const flip = state.facingMode === "user" ? -1 : 1;
+        elements.video.style.transform = `scaleX(${flip}) scale(${baseScale})`;
       }
 
       function showError(message) {
@@ -806,9 +829,9 @@
         }
 
         if (state.usingSimulatedZoom) {
-          elements.video.style.transform = `scale(${state.zoom})`;
+          updateVideoTransform();
         } else {
-          elements.video.style.transform = "scale(1)";
+          updateVideoTransform();
         }
 
         updateZoomUI();
@@ -1024,6 +1047,7 @@
       }
 
       elements.startBtn.addEventListener("click", () => {
+        setBootSeen();
         void lockPortraitOrientation();
         startCamera();
       });
@@ -1085,7 +1109,12 @@
         });
       }
 
-      setBootVisible(true);
+      if (hasBootSeen()) {
+        setBootVisible(false);
+        startCamera();
+      } else {
+        setBootVisible(true);
+      }
       updateZoomUI();
     </script>
   </body>
