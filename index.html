@@ -422,6 +422,47 @@
         margin: 8px 0 18px;
       }
 
+      .consent-block {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .consent-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .consent-row input {
+        margin: 0;
+        accent-color: var(--accent);
+      }
+
+      .legal-links {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      .legal-links a {
+        color: var(--accent);
+        text-decoration: underline;
+        text-decoration-color: rgba(243, 194, 74, 0.6);
+        text-underline-offset: 3px;
+      }
+
+      .legal-sep {
+        color: var(--dim);
+      }
+
       .start-btn {
         width: 100%;
         padding: 12px 16px;
@@ -433,6 +474,12 @@
         letter-spacing: 0.12em;
         text-transform: uppercase;
         cursor: pointer;
+      }
+
+      .start-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        filter: grayscale(0.2);
       }
 
       .boot-note {
@@ -645,7 +692,7 @@
 
         <div class="top-ui">
           <div class="top-left">
-            <span class="badge">SILENT</span>
+            <span class="badge">QUIET</span>
           </div>
           <div class="top-right">
             <button id="gridToggle" class="icon-btn" aria-label="Grid" aria-pressed="false">
@@ -692,9 +739,32 @@
         <div id="bootOverlay" class="boot-overlay">
           <div class="boot-card">
             <div class="boot-title">Silencio Camera</div>
-            <div class="boot-sub">Tap to start the camera</div>
-            <button id="startBtn" class="start-btn">Start Camera</button>
-            <div class="boot-note">Requires HTTPS and camera access</div>
+            <div class="boot-sub">면학 공간 전용 매너 카메라</div>
+            <div class="consent-block">
+              <label class="consent-row" for="consentCheckbox">
+                <input type="checkbox" id="consentCheckbox" />
+                <span>이용약관 및 개인정보처리방침에 동의합니다.</span>
+              </label>
+              <div class="legal-links">
+                <a
+                  href="https://maieuticai.github.io/silencio_privacy/terms.html"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Terms and Conditions
+                </a>
+                <span class="legal-sep">·</span>
+                <a
+                  href="https://maieuticai.github.io/silencio_privacy/privacy.html"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  Privacy Policy
+                </a>
+              </div>
+            </div>
+            <button id="startBtn" class="start-btn" disabled>Start Camera</button>
+            <div class="boot-note">본 웹앱은 학습 지원용 도구이며 불법적 사용을 금합니다.</div>
           </div>
         </div>
 
@@ -721,6 +791,7 @@
         canvas: document.getElementById("captureCanvas"),
         bootOverlay: document.getElementById("bootOverlay"),
         startBtn: document.getElementById("startBtn"),
+        consentCheckbox: document.getElementById("consentCheckbox"),
         errorBanner: document.getElementById("errorBanner"),
         gridToggle: document.getElementById("gridToggle"),
         zoomRow: document.getElementById("zoomRow"),
@@ -760,6 +831,7 @@
 
       const zoomSteps = [0.5, 1, 2, 3];
       const BOOT_SEEN_KEY = "silencio_boot_seen";
+      const CONSENT_KEY = "silencio_consent_v1";
       const isAndroid = /Android/i.test(navigator.userAgent);
 
       const isStandaloneDisplay =
@@ -780,6 +852,22 @@
       function setBootSeen() {
         try {
           localStorage.setItem(BOOT_SEEN_KEY, "1");
+        } catch (error) {
+          // Ignore storage failures (private browsing, quotas, etc.).
+        }
+      }
+
+      function hasConsent() {
+        try {
+          return localStorage.getItem(CONSENT_KEY) === "1";
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function setConsent() {
+        try {
+          localStorage.setItem(CONSENT_KEY, "1");
         } catch (error) {
           // Ignore storage failures (private browsing, quotas, etc.).
         }
@@ -1305,9 +1393,17 @@
       }
 
       elements.startBtn.addEventListener("click", () => {
+        if (!elements.consentCheckbox.checked) {
+          return;
+        }
+
+        setConsent();
         setBootSeen();
         void lockPortraitOrientation();
         startCamera();
+      });
+      elements.consentCheckbox.addEventListener("change", () => {
+        elements.startBtn.disabled = !elements.consentCheckbox.checked;
       });
       elements.shutterBtn.addEventListener("click", capturePhoto);
       elements.shutterBtnLandscape.addEventListener("click", capturePhoto);
@@ -1359,7 +1455,7 @@
           return;
         }
 
-        if (hasBootSeen()) {
+        if (hasBootSeen() && hasConsent()) {
           setBootVisible(false);
           startCamera();
         } else {
@@ -1379,7 +1475,11 @@
         });
       }
 
-      if (hasBootSeen()) {
+      const initialConsent = hasConsent();
+      elements.consentCheckbox.checked = initialConsent;
+      elements.startBtn.disabled = !initialConsent;
+
+      if (hasBootSeen() && hasConsent()) {
         setBootVisible(false);
         startCamera();
       } else {
