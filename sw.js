@@ -1,4 +1,4 @@
-const CACHE_NAME = "silencio-v1";
+const CACHE_NAME = "silencio-v2";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./sw.js"];
 const CACHE_URLS = ASSETS.map((asset) => new URL(asset, self.location).href);
 const CACHE_PATHS = new Set(CACHE_URLS.map((url) => new URL(url).pathname));
@@ -32,12 +32,23 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.mode === "navigate") {
     event.respondWith(
-      caches.match("./index.html").then((cached) =>
-        cached ||
-        fetch(event.request).catch(() =>
-          new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } })
+      fetch(event.request, { cache: "no-store" })
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));
+            return response;
+          }
+
+          return caches.match("./index.html").then((cached) => cached || response);
+        })
+        .catch(() =>
+          caches.match("./index.html").then(
+            (cached) =>
+              cached ||
+              new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } })
+          )
         )
-      )
     );
     return;
   }
