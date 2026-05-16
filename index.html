@@ -9,6 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <link rel="manifest" href="manifest.json" />
     <link
       rel="apple-touch-icon"
@@ -752,10 +753,14 @@
         pinchStartZoom: 1,
         pinchRaf: 0,
         pendingZoom: null,
+        lastDeviceId: null,
+        lastFacingMode: null,
+        deviceFacingMap: {},
       };
 
       const zoomSteps = [0.5, 1, 2, 3];
       const BOOT_SEEN_KEY = "silencio_boot_seen";
+      const isAndroid = /Android/i.test(navigator.userAgent);
 
       const isStandaloneDisplay =
         (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
@@ -795,6 +800,72 @@
         const dx = first.clientX - second.clientX;
         const dy = first.clientY - second.clientY;
         return Math.hypot(dx, dy);
+      }
+
+      function inferFacingFromLabel(label) {
+        if (!label) {
+          return null;
+        }
+
+        if (/front|user|face/i.test(label)) {
+          return "user";
+        }
+
+        if (/back|rear|environment/i.test(label)) {
+          return "environment";
+        }
+
+        return null;
+      }
+
+      async function listVideoDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+          return [];
+        }
+
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          return devices.filter((device) => device.kind === "videoinput");
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function findDeviceByLabel(devices, facingMode) {
+        if (!devices.length) {
+          return null;
+        }
+
+        return (
+          devices.find((device) => inferFacingFromLabel(device.label) === facingMode) || null
+        );
+      }
+
+      async function findAlternateDeviceId(currentDeviceId, facingMode) {
+        const devices = await listVideoDevices();
+        if (devices.length < 2) {
+          return null;
+        }
+
+        const knownMatch = devices.find(
+          (device) =>
+            device.deviceId &&
+            device.deviceId !== currentDeviceId &&
+            state.deviceFacingMap[device.deviceId] === facingMode
+        );
+        if (knownMatch) {
+          return knownMatch.deviceId;
+        }
+
+        const labeled = findDeviceByLabel(devices, facingMode);
+        if (labeled && labeled.deviceId && labeled.deviceId !== currentDeviceId) {
+          return labeled.deviceId;
+        }
+
+        const fallback = devices.find(
+          (device) => device.deviceId && device.deviceId !== currentDeviceId
+        );
+        return fallback ? fallback.deviceId : null;
       }
 
       function scheduleZoom(value) {
@@ -848,23 +919,34 @@
         elements.stage.classList.remove("ready");
       }
 
-      async function startCamera() {
+      async function startCamera(preferredDeviceId = null, allowFallback = true) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           showError("Camera API is not available in this browser.");
           return;
         }
 
+        const requestedFacingMode = state.facingMode;
+        const previousFacingMode = state.lastFacingMode;
+        const previousDeviceId = state.lastDeviceId;
+
         clearError();
         stopCamera();
         void lockPortraitOrientation();
 
+        const videoConstraints = {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        };
+
+        if (preferredDeviceId) {
+          videoConstraints.deviceId = { exact: preferredDeviceId };
+        } else {
+          videoConstraints.facingMode = { ideal: requestedFacingMode };
+        }
+
         const constraints = {
           audio: false,
-          video: {
-            facingMode: { ideal: state.facingMode },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
+          video: videoConstraints,
         };
 
         try {
@@ -882,6 +964,42 @@
           const [track] = stream.getVideoTracks();
           state.track = track || null;
 
+          const settings = track && track.getSettings ? track.getSettings() : {};
+          const currentDeviceId = settings.deviceId || null;
+          let currentFacingMode = settings.facingMode || null;
+          const inferredFacingMode = inferFacingFromLabel(track && track.label ? track.label : "");
+          if (!currentFacingMode && inferredFacingMode) {
+            currentFacingMode = inferredFacingMode;
+          }
+
+          if (currentDeviceId && currentFacingMode) {
+            state.deviceFacingMap[currentDeviceId] = currentFacingMode;
+          }
+
+          if (currentFacingMode) {
+            state.facingMode = currentFacingMode;
+          }
+
+          state.lastDeviceId = currentDeviceId;
+          state.lastFacingMode = currentFacingMode || requestedFacingMode;
+
+          if (isAndroid && allowFallback) {
+            const switchedFacing = previousFacingMode && previousFacingMode !== requestedFacingMode;
+            const deviceDidNotChange =
+              previousDeviceId && currentDeviceId && previousDeviceId === currentDeviceId;
+            const facingMismatch = currentFacingMode && currentFacingMode !== requestedFacingMode;
+
+            if (switchedFacing && (facingMismatch || deviceDidNotChange)) {
+              const alternateDeviceId = await findAlternateDeviceId(
+                currentDeviceId,
+                requestedFacingMode
+              );
+              if (alternateDeviceId) {
+                return startCamera(alternateDeviceId, false);
+              }
+            }
+          }
+
           const caps = track && track.getCapabilities ? track.getCapabilities() : null;
           if (caps && caps.zoom) {
             state.canZoom = true;
@@ -897,6 +1015,7 @@
           updateZoomUI();
           setBootVisible(false);
         } catch (error) {
+          stopCamera();
           showError("Camera access was blocked or unavailable.");
           setBootVisible(true);
         }
