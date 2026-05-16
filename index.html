@@ -1324,15 +1324,14 @@
         const file = new File([blob], `silencio-${Date.now()}.jpg`, {
           type: blob.type || "image/jpeg",
         });
-        const shareData = {
+        const fileShareData = {
           files: [file],
-          title: "Silencio Photo",
         };
 
         let canShare = false;
         if (navigator.share) {
           try {
-            canShare = navigator.canShare ? navigator.canShare(shareData) : true;
+            canShare = navigator.canShare ? navigator.canShare(fileShareData) : true;
           } catch (error) {
             canShare = false;
           }
@@ -1340,7 +1339,7 @@
 
         if (canShare) {
           navigator
-            .share(shareData)
+            .share(fileShareData)
             .catch((error) => {
               if (error && error.name === "AbortError") {
                 return;
@@ -1375,15 +1374,14 @@
         const file = new File([state.lastCaptureBlob], `silencio-${Date.now()}.jpg`, {
           type: state.lastCaptureBlob.type || "image/jpeg",
         });
-        const shareData = {
+        const fileShareData = {
           files: [file],
-          title: "Silencio Photo",
         };
 
         let canShare = true;
         if (navigator.canShare) {
           try {
-            canShare = navigator.canShare(shareData);
+            canShare = navigator.canShare(fileShareData);
           } catch (error) {
             canShare = false;
           }
@@ -1396,7 +1394,7 @@
         event.preventDefault();
 
         try {
-          await navigator.share(shareData);
+          await navigator.share(fileShareData);
         } catch (error) {
           if (error && error.name === "AbortError") {
             return;
