@@ -827,11 +827,12 @@
         lastDeviceId: null,
         lastFacingMode: null,
         deviceFacingMap: {},
+        downloadFallbackPending: false,
       };
 
       const zoomSteps = [0.5, 1, 2, 3];
       const BOOT_SEEN_KEY = "silencio_boot_seen";
-      const CONSENT_KEY = "silencio_consent_v1";
+      const CONSENT_KEY = "silencio_consent_v2";
       const isAndroid = /Android/i.test(navigator.userAgent);
 
       const isStandaloneDisplay =
@@ -1282,6 +1283,12 @@
         const height = elements.video.videoHeight;
         const context = elements.canvas.getContext("2d");
 
+        if (!context) {
+          state.shutterBusy = false;
+          showError("Capture is unavailable.");
+          return;
+        }
+
         elements.canvas.width = width;
         elements.canvas.height = height;
         context.save();
@@ -1356,6 +1363,11 @@
       }
 
       async function shareCaptureFromPreview(event) {
+        if (state.downloadFallbackPending) {
+          state.downloadFallbackPending = false;
+          return;
+        }
+
         if (!state.lastCaptureBlob || !navigator.share) {
           return;
         }
@@ -1388,6 +1400,11 @@
         } catch (error) {
           if (error && error.name === "AbortError") {
             return;
+          }
+
+          if (state.lastCaptureUrl) {
+            state.downloadFallbackPending = true;
+            elements.downloadBtn.click();
           }
         }
       }

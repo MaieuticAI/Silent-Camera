@@ -1,5 +1,7 @@
 const CACHE_NAME = "silencio-v1";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./sw.js"];
+const CACHE_URLS = ASSETS.map((asset) => new URL(asset, self.location).href);
+const CACHE_PATHS = new Set(CACHE_URLS.map((url) => new URL(url).pathname));
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -41,6 +43,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (!CACHE_PATHS.has(requestUrl.pathname)) {
     return;
   }
 
