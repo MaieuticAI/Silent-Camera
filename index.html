@@ -1326,13 +1326,12 @@
         });
         const fileShareData = {
           files: [file],
-          text: " ",
         };
 
         let canShare = false;
-        if (navigator.share) {
+        if (navigator.share && navigator.canShare) {
           try {
-            canShare = navigator.canShare ? navigator.canShare(fileShareData) : true;
+            canShare = navigator.canShare(fileShareData);
           } catch (error) {
             canShare = false;
           }
@@ -1377,11 +1376,10 @@
         });
         const fileShareData = {
           files: [file],
-          text: " ",
         };
 
-        let canShare = true;
-        if (navigator.canShare) {
+        let canShare = false;
+        if (navigator.share && navigator.canShare) {
           try {
             canShare = navigator.canShare(fileShareData);
           } catch (error) {
