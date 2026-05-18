@@ -1,6 +1,6 @@
 {
-  "name": "Silencio Camera",
-  "short_name": "Silencio",
+  "name": "Silent Camera",
+  "short_name": "Silent",
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
